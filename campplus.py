@@ -9,7 +9,10 @@ import torch
 import torchaudio
 import argparse
 from utils import dynamic_import, FBank
-
+import ast 
+import os
+import pandas as pd
+import numpy as np
 parser = argparse.ArgumentParser(description='Extract speaker embeddings.')
 parser.add_argument('--wavs', nargs='+', type=str, help='Wavs')
 
@@ -61,13 +64,61 @@ class Campplus:#CAM++
         return score
 
 
-if __name__ == "__main__":
+def pred_similarity(wav_path1, wav_path2):
   
-    args = parser.parse_args()
-    wav_path1, wav_path2 = args.wavs
     CAM_model = Campplus()
     
     #wav_path1 = './clips_wav/common_voice_ar_19058496.wav' #.wav 16k sample rate
     #wav_path2 = './clips_wav/common_voice_ar_24175176.wav'
     score = CAM_model.compute_similarty(wav_path1,wav_path2)
     print('similar' if score > CAM_model.threshold else 'not similar')
+    return(score)
+
+def embed_audio(wav_path1):
+    CAM_model = Campplus()
+    file_embedding=CAM_model.compute_embedding(wav_path1)
+    return file_embedding
+
+def create_embedding_db():
+    db_file = 'data_base.csv'
+    directory = os.path.join('.', 'data')
+
+    # Check if the database file exists
+    if os.path.exists(db_file):
+        # Load the existing database
+        data_base = pd.read_csv(db_file)
+    else:
+        # Create a new DataFrame if the database does not exist
+        data_base = pd.DataFrame(columns=['audio_file', 'embedding'])
+
+    # Get the list of audio files already in the database
+    existing_files = set(data_base['audio_file']) if not data_base.empty else set()
+
+    for audio_file in os.listdir(directory):
+        if audio_file.endswith('.wav') and audio_file not in existing_files:  # Ensure you only process new audio files
+            audio_path = os.path.join(directory, audio_file)
+            audio_embedding = embed_audio(audio_path)
+            # Create a DataFrame for the new row
+            new_row = pd.DataFrame({'audio_file': [audio_file], 'embedding': [audio_embedding.tolist()]})
+            # Concatenate the new row to the existing DataFrame
+            data_base = pd.concat([data_base, new_row], ignore_index=True)
+
+    # Save the updated DataFrame to a CSV file
+    data_base.to_csv(db_file, index=False)
+
+
+def rank(audio_file):
+    audio_embedding = embed_audio(audio_file)
+    similarity = torch.nn.CosineSimilarity(dim=-1, eps=1e-6)
+    db = pd.read_csv('data_base.csv')
+    
+    results = []
+    for i in range(len(db)):
+        file_name = db.iloc[i]['audio_file']
+        # Convert the string representation of the list back to a tensor
+        embedding_db = torch.tensor(ast.literal_eval(db.iloc[i]['embedding']))
+        score = np.round(100*similarity(embedding_db, torch.tensor(audio_embedding)).item(),2)
+        results.append({"file": file_name, "score": score})
+    
+    return results
+

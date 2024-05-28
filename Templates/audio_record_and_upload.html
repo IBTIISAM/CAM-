@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Audio Record and Upload with Threshold</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f9;
+            margin: 20px;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .back-button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 5px 10px; /* Smaller padding for a smaller button */
+            margin: 10px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            position: absolute; /* Positioning it absolutely to place it in the top left corner */
+            top: 20px; /* Adjust top spacing */
+            left: 20px; /* Adjust left spacing */
+            font-size: 12px; /* Smaller font size for the text */
+        }
+        .back-button:hover {
+            background-color: #0056b3;
+        }
+        input[type="file"], input[type="number"] {
+            margin: 10px 0;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .result {
+            color: #28a745;
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-button">Back</a>
+    <h1>Audio Record and Upload with Threshold</h1>
+    <!-- Voice 1 Controls -->
+    <h2>Voice 1</h2>
+    <button id="recordButton1" type="button">Start Recording Voice 1</button>
+    <input type="file" id="audioUpload1" accept="audio/*" aria-label="Upload Voice 1">
+    <audio id="audioPlayback1" controls hidden></audio>
+    <p id="status1">Press the button to start recording Voice 1 or upload a file.</p>
+    <!-- Voice 2 Controls -->
+    <h2>Voice 2</h2>
+    <button id="recordButton2" type="button">Start Recording Voice 2</button>
+    <input type="file" id="audioUpload2" accept="audio/*" aria-label="Upload Voice 2">
+    <audio id="audioPlayback2" controls hidden></audio>
+    <p id="status2">Press the button to start recording Voice 2 or upload a file.</p>
+    <!-- Threshold Input -->
+    <h2>Set Threshold</h2>
+    <input type="number" id="threshold" min="0" max="100" value="50" aria-label="Set matching threshold">
+    <button id="submitVoices" type="button">Submit for Comparison</button>
+    <!-- Display Comparison Result -->
+    <h2>Comparison Result</h2>
+    <p id="comparisonResult" class="result"></p>
+    <script src="./static/recorder.js"></script> <!-- Verify this path is correct -->
+</body>
+</html>

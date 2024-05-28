@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Compare with Database</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <style>
+        .back-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Back Button -->
+    <a href="/" class="btn btn-sm btn-secondary back-button">Back</a>
+
+    <div class="container mt-5">
+        <h1>Compare with Database</h1>
+        <form id="databaseForm" class="mt-3">
+            <input type="file" name="voice" required><br>
+            <input type="text" name="threshold" placeholder="Enter threshold" required><br>
+            <button type="submit" class="btn btn-primary mt-2">Compare with DB</button>
+        </form>
+        <div id="databaseResult" class="mt-3"></div>
+        <button id="download-csv" class="btn btn-success mt-2" style="display:none;">Download CSV</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#databaseForm').on('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+                $.ajax({
+                    type: 'POST',
+                    url: '/compare_with_db',
+                    data: formData,
+                    cache: false,
+                    contentType: false,
+                    processData: false,
+                    success: function(data) {
+                        if (data.error) {
+                            $('#databaseResult').html('<div class="alert alert-danger">' + data.error + '</div>');
+                            $('#download-csv').hide();
+                        } else {
+                            let results = '<table id="results-table" class="table"><thead><tr><th>File</th><th>Score</th><th>Play</th></tr></thead><tbody>';
+                            data.matches.forEach(match => {
+                                let color = parseInt(match.score) >= parseInt($('input[name="threshold"]').val()) ? 'text-success' : 'text-danger';
+                                results += `<tr><td>${match.file}</td><td class="${color}">${match.score}%</td><td><audio controls src="${match.audioUrl}"></audio></td></tr>`;
+                            });
+                            results += '</tbody></table>';
+                            $('#databaseResult').html(results);
+                            $('#download-csv').show();
+                        }
+                    },
+                    error: function() {
+                        $('#databaseResult').html('<div class="alert alert-danger">An error occurred.</div>');
+                        $('#download-csv').hide();
+                    }
+                });
+            });
+
+            $('#download-csv').click(function() {
+                let csvContent = "data:text/csv;charset=utf-8,";
+                let rows = document.querySelectorAll('#results-table tr');
+                rows.forEach(function(row, index) {
+                    let cols = row.querySelectorAll('td, th');
+                    let csvRow = [];
+                    cols.forEach(function(col, i) {
+                        // Skip the third column (audio player)
+                        if (i !== 2) csvRow.push(col.innerText);
+                    });
+                    csvContent += csvRow.join(",") + "\\n";
+                });
+
+                var encodedUri = encodeURI(csvContent);
+                var link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "database_comparison_results.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        });
+    </script>
+</body>
+</html>
