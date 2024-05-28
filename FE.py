@@ -3,11 +3,20 @@ import random
 import logging
 from flask import Flask, render_template, request, jsonify
 from campplus import create_embedding_db, rank
+import pandas as pd
 
 app = Flask(__name__)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('flask_app')
+
+# Path to the data directory
+DATA_DIR = './data'
+DB_FILE = 'data_base.csv'
+
+# Ensure the data directory exists
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
 @app.route('/')
 def index():
@@ -66,16 +75,12 @@ def compare_with_db():
         threshold = int(request.form.get('threshold')) / 100
         logger.info(f"Received file: {voice.filename} with threshold {threshold}")
 
-        # Path to the data directory
-        data_dir = './data'
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
-
-        temp_file_path = os.path.join(data_dir, voice.filename)
+        # Save the uploaded file to a temporary location
+        temp_file_path = os.path.join(DATA_DIR, voice.filename)
         voice.save(temp_file_path)
 
         # Update the embedding database only if new files are present
-        create_embedding_db()
+        create_embedding_db_if_needed()
 
         matches = rank(temp_file_path)
         logger.info(f'Matched files: {matches}')
@@ -91,6 +96,27 @@ def compare_with_db():
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify(error="An error occurred during processing"), 500
+
+def create_embedding_db_if_needed():
+    '''
+    This function checks if the database needs to be updated and only updates
+    it if new files are present.
+    '''
+    if os.path.exists(DB_FILE):
+        data_base = pd.read_csv(DB_FILE)
+        existing_files = set(data_base['audio_file']) if not data_base.empty else set()
+    else:
+        data_base = pd.DataFrame(columns=['audio_file', 'embedding'])
+        existing_files = set()
+
+    # Get the list of new audio files
+    new_files = [f for f in os.listdir(DATA_DIR) if f.endswith('.wav') and f not in existing_files]
+
+    if new_files:
+        logger.info(f'New files detected: {new_files}')
+        create_embedding_db()
+    else:
+        logger.info('No new files to process.')
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
