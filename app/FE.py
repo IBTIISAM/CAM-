@@ -6,7 +6,8 @@ from flask import Flask, render_template, request, jsonify
 from flask_caching import Cache
 from campplus import create_embedding_db, rank
 import pandas as pd
-import subprocess
+from pydub import AudioSegment
+from pydub.exceptions import CouldntDecodeError
 
 app = Flask(__name__)
 
@@ -26,24 +27,30 @@ if not os.path.exists(DATA_DIR):
 
 def convert_webm_to_wav(input_file, output_file):
     try:
-        logger.info(f"Converting {input_file} to {output_file}")
-        result = subprocess.run(
-            ['ffmpeg', '-i', input_file, output_file],
-            capture_output=True,
-            text=True
-        )
-        logger.info(f"ffmpeg output: {result.stdout}")
-        logger.error(f"ffmpeg error: {result.stderr}")
-        result.check_returncode()
+        logger.info(f"Converting {input_file} to {output_file} using pydub")
+        audio = AudioSegment.from_file(input_file, format="webm")
+        audio.export(output_file, format="wav")
         logger.info(f"Conversion successful: {input_file} to {output_file}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error converting file with ffmpeg: {e}")
-        raise
+    except CouldntDecodeError as e:
+        logger.error(f"Error decoding file with pydub: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"General error during conversion: {e}")
+        raise e
 
 def process_file(file, filename):
     temp_file_path = os.path.join(DATA_DIR, filename)
+    logger.info(f"Saving file {filename} to {temp_file_path}")
     file.save(temp_file_path)
     
+    # Log the file size to check for empty files
+    file_size = os.path.getsize(temp_file_path)
+    logger.info(f"File size: {file_size} bytes")
+
+    if file_size == 0:
+        logger.error(f"File is empty: {temp_file_path}")
+        raise ValueError(f"File is empty: {temp_file_path}")
+
     # Determine file type and convert if necessary
     if filename.endswith('.webm'):
         temp_wav_path = temp_file_path.replace('.webm', '.wav')
