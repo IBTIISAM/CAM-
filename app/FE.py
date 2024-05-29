@@ -1,11 +1,17 @@
 import os
 import random
 import logging
+import time
 from flask import Flask, render_template, request, jsonify
+from flask_caching import Cache
 from campplus import create_embedding_db, rank
 import pandas as pd
+import subprocess
 
 app = Flask(__name__)
+
+# Configure Flask-Caching
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('flask_app')
@@ -18,15 +24,53 @@ DB_FILE = 'data_base.csv'
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
+def convert_webm_to_wav(input_file, output_file):
+    try:
+        logger.info(f"Converting {input_file} to {output_file}")
+        result = subprocess.run(
+            ['ffmpeg', '-i', input_file, output_file],
+            capture_output=True,
+            text=True
+        )
+        logger.info(f"ffmpeg output: {result.stdout}")
+        logger.error(f"ffmpeg error: {result.stderr}")
+        result.check_returncode()
+        logger.info(f"Conversion successful: {input_file} to {output_file}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error converting file with ffmpeg: {e}")
+        raise
+
+def process_file(file, filename):
+    temp_file_path = os.path.join(DATA_DIR, filename)
+    file.save(temp_file_path)
+    
+    # Determine file type and convert if necessary
+    if filename.endswith('.webm'):
+        temp_wav_path = temp_file_path.replace('.webm', '.wav')
+        convert_webm_to_wav(temp_file_path, temp_wav_path)
+        os.remove(temp_file_path)  # Clean up the original .webm file
+        return temp_wav_path
+    elif filename.endswith('.wav'):
+        return temp_file_path
+    else:
+        raise ValueError("Unsupported file type")
+
 @app.route('/')
+@cache.cached(timeout=60)  # Cache this view for 60 seconds
 def index():
-    return render_template('fe.html')
+    start_time = time.time()
+    response = render_template('fe.html')
+    end_time = time.time()
+    logger.info(f"Main page loaded in {end_time - start_time:.2f} seconds")
+    return response
 
 @app.route('/audio_record_and_upload')
+@cache.cached(timeout=60)  # Cache this view for 60 seconds
 def audio_record_and_upload():
     return render_template('audio_record_and_upload.html')
 
 @app.route('/compare_with_database')
+@cache.cached(timeout=60)  # Cache this view for 60 seconds
 def compare_with_database():
     return render_template('compare_with_database.html')
 
@@ -43,7 +87,16 @@ def compare_two():
 
         logger.info(f"Received files: {voice1.filename}, {voice2.filename} with threshold {threshold}")
 
+        # Process the uploaded files
+        temp_voice1_path = process_file(voice1, voice1.filename)
+        temp_voice2_path = process_file(voice2, voice2.filename)
+
+        # Process the .wav files (you can add your specific processing logic here)
         random_confidence = random.randint(70, 100)
+
+        # Clean up the temporary files
+        os.remove(temp_voice1_path)
+        os.remove(temp_voice2_path)
         
         return jsonify(result="Comparison result here", confidence=random_confidence)
     except Exception as e:
@@ -58,6 +111,8 @@ def compare_with_db():
     that are above the threshold and displays it as a list.
     '''
     try:
+        start_time = time.time()
+        
         logger.info(f'Request received: {request}')
         logger.info(f'Request files: {request.files}')
         logger.info(f'Request form: {request.form}')
@@ -75,9 +130,8 @@ def compare_with_db():
         threshold = int(request.form.get('threshold')) / 100
         logger.info(f"Received file: {voice.filename} with threshold {threshold}")
 
-        # Save the uploaded file to a temporary location
-        temp_file_path = os.path.join(DATA_DIR, voice.filename)
-        voice.save(temp_file_path)
+        # Process the uploaded file
+        temp_file_path = process_file(voice, voice.filename)
 
         # Update the embedding database only if new files are present
         create_embedding_db_if_needed()
@@ -91,6 +145,9 @@ def compare_with_db():
         # Clean up the temporary file
         os.remove(temp_file_path)
 
+        end_time = time.time()
+        logger.info(f"Processing time: {end_time - start_time:.2f} seconds")
+
         return jsonify(matches=sorted_db_results)
 
     except Exception as e:
@@ -102,21 +159,28 @@ def create_embedding_db_if_needed():
     This function checks if the database needs to be updated and only updates
     it if new files are present.
     '''
-    if os.path.exists(DB_FILE):
-        data_base = pd.read_csv(DB_FILE)
-        existing_files = set(data_base['audio_file']) if not data_base.empty else set()
-    else:
-        data_base = pd.DataFrame(columns=['audio_file', 'embedding'])
-        existing_files = set()
+    try:
+        if os.path.exists(DB_FILE):
+            data_base = pd.read_csv(DB_FILE)
+            existing_files = set(data_base['audio_file']) if not data_base.empty else set()
+        else:
+            data_base = pd.DataFrame(columns=['audio_file', 'embedding'])
+            existing_files = set()
 
-    # Get the list of new audio files
-    new_files = [f for f in os.listdir(DATA_DIR) if f.endswith('.wav') and f not in existing_files]
+        # Get the list of new audio files
+        new_files = [f for f in os.listdir(DATA_DIR) if f.endswith('.wav') and f not in existing_files]
 
-    if new_files:
-        logger.info(f'New files detected: {new_files}')
-        create_embedding_db()
-    else:
-        logger.info('No new files to process.')
+        if new_files:
+            logger.info(f'New files detected: {new_files}')
+            create_embedding_db()
+        else:
+            logger.info('No new files to process.')
+    except Exception as e:
+        logger.error(f"Error in create_embedding_db_if_needed: {str(e)}")
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    logger.info("Starting Flask app...")
+    start_time = time.time()
+    app.run(host="0.0.0.0", port=5000)
+    end_time = time.time()
+    logger.info(f"Flask app started in {end_time - start_time:.2f} seconds")
