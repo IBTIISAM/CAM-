@@ -4,11 +4,11 @@ import logging
 import time
 from flask import Flask, render_template, request, jsonify
 from flask_caching import Cache
-from campplus import create_embedding_db, rank
+from campplus import create_embedding_db, rank,pred_similarity
 import pandas as pd
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
-
+import numpy as np
 app = Flask(__name__)
 
 # Configure Flask-Caching
@@ -97,15 +97,20 @@ def compare_two():
         # Process the uploaded files
         temp_voice1_path = process_file(voice1, voice1.filename)
         temp_voice2_path = process_file(voice2, voice2.filename)
-
+        
+        files = os.listdir('./data')
+        
+        # Log the list of files
+        logging.info(f'Files in directory : {files}')
+        
         # Process the .wav files (you can add your specific processing logic here)
-        random_confidence = random.randint(70, 100)
+        score = np.round(100*pred_similarity(temp_voice1_path,temp_voice2_path),2)
 
         # Clean up the temporary files
         os.remove(temp_voice1_path)
         os.remove(temp_voice2_path)
         
-        return jsonify(result="Comparison result here", confidence=random_confidence)
+        return jsonify(result="Comparison result here", confidence=score)
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify(error="An error occurred during processing"), 500
