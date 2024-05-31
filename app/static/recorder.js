@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+
     // Setup for Voice 1 and Voice 2
     let recordedBlobsVoice1 = [];
     let recordedBlobsVoice2 = [];
@@ -42,10 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const resultText = document.getElementById('comparisonResult');
             const isMatch = data.confidence >= thresholdValue;
             resultText.textContent = isMatch ? `It's a match (${data.confidence}%)` : `Not a match (${data.confidence}%)`;
+            resultText.style.color = isMatch ? '#28a745' : '#dc3545'; // Green for match, red for not a match
         })
         .catch(error => {
             console.error('Error:', error);
-            // Handle error - Update the UI to inform the user
+            
         });
     });
 

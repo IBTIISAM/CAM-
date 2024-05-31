@@ -14,7 +14,7 @@ import numpy as np
 
 app = Flask(__name__)
 
-# Configure Flask-Caching
+# Configure Flask-Caching, to resolve the latency issue
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 logging.basicConfig(level=logging.INFO)
@@ -22,13 +22,20 @@ logger = logging.getLogger('flask_app')
 
 # Path to the data directory
 DATA_DIR = './data'
+
+# Name of the database csv file 
 DB_FILE = 'data_base.csv'
 
-# Ensure the data directory exists
+# Ensure the data directory exists, if not create one 
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
 def convert_webm_to_wav(input_file, output_file):
+    
+    '''
+    This function takes the input file and converts it from wemb to wav, if needed.
+
+    '''
     try:
         logger.info(f"Converting {input_file} to {output_file} using pydub")
         audio = AudioSegment.from_file(input_file, format="webm")
@@ -42,6 +49,14 @@ def convert_webm_to_wav(input_file, output_file):
         raise e
 
 def process_file(file, filename):
+    
+    '''
+    This function recieves the audio files from compare_two and check the file extention
+    If the file is wemb it converts it to wav by passing it another function. 
+    It then saves the converted file (to wav) to a new temproarly file voice1.wav 
+    or voice2.wav
+    '''    
+    
     temp_file_path = os.path.join(DATA_DIR, filename)
     logger.info(f"Saving file {filename} to {temp_file_path}")
     file.save(temp_file_path)
@@ -54,7 +69,8 @@ def process_file(file, filename):
         logger.error(f"File is empty: {temp_file_path}")
         raise ValueError(f"File is empty: {temp_file_path}")
 
-    # Determine file type and convert if necessary
+    #convert the file if required.
+    
     if filename.endswith('.webm'):
         temp_wav_path = temp_file_path.replace('.webm', '.wav')
         convert_webm_to_wav(temp_file_path, temp_wav_path)
@@ -67,22 +83,23 @@ def process_file(file, filename):
 
 @app.route('/')
 @cache.cached(timeout=60)  # Cache this view for 60 seconds
-def index():
-    start_time = time.time()
+def index():   
     response = render_template('fe.html')
-    end_time = time.time()
-    logger.info(f"Main page loaded in {end_time - start_time:.2f} seconds")
     return response
 
+
 @app.route('/audio_record_and_upload')
-@cache.cached(timeout=60)  # Cache this view for 60 seconds
+@cache.cached(timeout=60) 
 def audio_record_and_upload():
     return render_template('audio_record_and_upload.html')
 
+
+
 @app.route('/compare_with_database')
-@cache.cached(timeout=60)  # Cache this view for 60 seconds
+@cache.cached(timeout=60)  
 def compare_with_database():
     return render_template('compare_with_database.html')
+
 
 @app.route('/compare_two', methods=['POST'])
 def compare_two():
@@ -100,13 +117,7 @@ def compare_two():
         # Process the uploaded files
         temp_voice1_path = process_file(voice1, voice1.filename)
         temp_voice2_path = process_file(voice2, voice2.filename)
-        
-        files = os.listdir('./data')
-        
-        # Log the list of files
-        logger.info(f'Files in directory: {files}')
-        
-        # Process the .wav files (you can add your specific processing logic here)
+
         score = np.round(100 * pred_similarity(temp_voice1_path, temp_voice2_path), 2)
 
         # Clean up the temporary files
@@ -127,30 +138,32 @@ def compare_with_db():
     with a database of voices stored in ./data, and returns the list of voices
     that are above the threshold and displays it as a list.
     '''
+    
     try:
-        start_time = time.time()
+        
         
         logger.info(f'Request received: {request}')
         logger.info(f'Request files: {request.files}')
         logger.info(f'Request form: {request.form}')
         
-        # Check if the POST request has the file part
+        # Check if the POST request has the file part,otherwise raise an error
         if 'voice' not in request.files:
             return jsonify(error="No file part in the request"), 400
 
         voice = request.files['voice']
 
-        # Check if the user has actually selected a file
+        # Check if the user has actually selected a file , otherwise raise an error
         if voice.filename == '':
             return jsonify(error="No selected file"), 400
 
-        threshold = int(request.form.get('threshold')) / 100
+        threshold = int(request.form.get('threshold'))
+        
         logger.info(f"Received file: {voice.filename} with threshold {threshold}")
 
         # Process the uploaded file
         temp_file_path = process_file(voice, voice.filename)
 
-        # Update the embedding database only if new files are present
+        # Update the embedding database, in case new data are added (only additional files are embedded) 
         create_embedding_db_if_needed()
 
         matches = rank(temp_file_path)
@@ -162,25 +175,27 @@ def compare_with_db():
         # Clean up the temporary file
         os.remove(temp_file_path)
 
-        end_time = time.time()
-        logger.info(f"Processing time: {end_time - start_time:.2f} seconds")
-
         return jsonify(matches=sorted_db_results)
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify(error="An error occurred during processing"), 500
 
+
 def create_embedding_db_if_needed():
     '''
     This function checks if the database needs to be updated and only updates
     it if new files are present.
+    If database is not present it create a new one
     '''
+    
     try:
+        # check if data base exists
         if os.path.exists(DB_FILE):
             data_base = pd.read_csv(DB_FILE)
             existing_files = set(data_base['audio_file']) if not data_base.empty else set()
         else:
+            # if not create a new db
             data_base = pd.DataFrame(columns=['audio_file', 'embedding'])
             existing_files = set()
 
@@ -189,7 +204,9 @@ def create_embedding_db_if_needed():
 
         if new_files:
             logger.info(f'New files detected: {new_files}')
-            create_embedding_db()
+            # if new files exists, either additional or no previous data base,
+            # run the below function to create a database
+            create_embedding_db(DB_FILE)
         else:
             logger.info('No new files to process.')
     except Exception as e:
@@ -197,7 +214,4 @@ def create_embedding_db_if_needed():
 
 if __name__ == '__main__':
     logger.info("Starting Flask app...")
-    start_time = time.time()
     app.run(host="0.0.0.0", port=5000)
-    end_time = time.time()
-    logger.info(f"Flask app started in {end_time - start_time:.2f} seconds")

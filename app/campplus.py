@@ -75,12 +75,19 @@ def pred_similarity(wav_path1, wav_path2):
     return(score)
 
 def embed_audio(wav_path1):
+    '''
+    This function recieves a file path and returns the embedding 
+    of the aduio, note that the aduio has to be wav
+    '''
     CAM_model = Campplus()
     file_embedding=CAM_model.compute_embedding(wav_path1)
     return file_embedding
 
-def create_embedding_db():
-    db_file = 'data_base.csv'
+def create_embedding_db(db_file):
+    '''
+    This function create/ update a database (db_file)
+    
+    '''
     directory = os.path.join('.', 'data')
 
     # Check if the database file exists
@@ -88,12 +95,14 @@ def create_embedding_db():
         # Load the existing database
         data_base = pd.read_csv(db_file)
     else:
-        # Create a new DataFrame if the database does not exist
+        # Create a new DataFrame if it does not 
         data_base = pd.DataFrame(columns=['audio_file', 'embedding'])
 
     # Get the list of audio files already in the database
     existing_files = set(data_base['audio_file']) if not data_base.empty else set()
 
+    # loop over the aduio files and get the embedding of each to be added to the db
+    
     for audio_file in os.listdir(directory):
         if audio_file.endswith('.wav') and audio_file not in existing_files:  # Ensure you only process new audio files
             audio_path = os.path.join(directory, audio_file)
@@ -108,6 +117,11 @@ def create_embedding_db():
 
 
 def rank(audio_file):
+    '''
+    This function receives the path of an aduio file (wav) and compare it
+    with the db, it then returns the results (unranked)
+    
+    '''
     audio_embedding = embed_audio(audio_file)
     similarity = torch.nn.CosineSimilarity(dim=-1, eps=1e-6)
     db = pd.read_csv('data_base.csv')
