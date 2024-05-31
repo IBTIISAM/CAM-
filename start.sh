@@ -1,7 +1,10 @@
 #!/bin/sh
 
-# Export LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+# delete the exiting image if it exists
+docker rmi -f voiceprint
 
-# Start the Flask app
-exec python /app/FE.py
+# build a new image
+docker build -t voiceprint .
+
+#run the application
+docker run -p 5000:5000 voiceprint
