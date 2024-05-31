@@ -12,13 +12,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('submitVoices').addEventListener('click', () => {
         const thresholdValue = document.getElementById('threshold').value;  // Fetch the threshold value
 
-        // Determine the blobs to use for comparison
-        const voice1Blob = uploadedFileVoice1 ? uploadedFileVoice1 : new Blob(recordedBlobsVoice1, {type: 'audio/webm'});
-        const voice2Blob = uploadedFileVoice2 ? uploadedFileVoice2 : new Blob(recordedBlobsVoice2, {type: 'audio/webm'});
-
         const formData = new FormData();
-        formData.append('voice1', voice1Blob, 'voice1.webm');
-        formData.append('voice2', voice2Blob, 'voice2.webm');
+
+        // Determine the blobs to use for comparison
+        if (uploadedFileVoice1) {
+            formData.append('voice1', uploadedFileVoice1, uploadedFileVoice1.name);  // Keep original name
+        } else {
+            const voice1Blob = new Blob(recordedBlobsVoice1, {type: 'audio/webm'});
+            formData.append('voice1', voice1Blob, 'voice1.webm');  // Use fixed name for recorded audio
+        }
+
+        if (uploadedFileVoice2) {
+            formData.append('voice2', uploadedFileVoice2, uploadedFileVoice2.name);  // Keep original name
+        } else {
+            const voice2Blob = new Blob(recordedBlobsVoice2, {type: 'audio/webm'});
+            formData.append('voice2', voice2Blob, 'voice2.webm');  // Use fixed name for recorded audio
+        }
+
         formData.append('threshold', thresholdValue);  // Append threshold to FormData
 
         fetch('/compare_two', {
@@ -101,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     audioPlayback.src = URL.createObjectURL(blob);
                     audioPlayback.hidden = false;
                     recordButton.textContent = `Start Recording Voice ${voiceNumber}`;
+
                     statusText.textContent = `Recording stopped. Play the audio or record again for Voice ${voiceNumber}.`;
                 };
 

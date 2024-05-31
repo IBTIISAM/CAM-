@@ -9,6 +9,9 @@ import pandas as pd
 from pydub import AudioSegment
 from pydub.exceptions import CouldntDecodeError
 import numpy as np
+
+
+
 app = Flask(__name__)
 
 # Configure Flask-Caching
@@ -101,10 +104,10 @@ def compare_two():
         files = os.listdir('./data')
         
         # Log the list of files
-        logging.info(f'Files in directory : {files}')
+        logger.info(f'Files in directory: {files}')
         
         # Process the .wav files (you can add your specific processing logic here)
-        score = np.round(100*pred_similarity(temp_voice1_path,temp_voice2_path),2)
+        score = np.round(100 * pred_similarity(temp_voice1_path, temp_voice2_path), 2)
 
         # Clean up the temporary files
         os.remove(temp_voice1_path)
@@ -114,6 +117,8 @@ def compare_two():
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         return jsonify(error="An error occurred during processing"), 500
+
+    
 
 @app.route('/compare_with_db', methods=['POST'])
 def compare_with_db():
